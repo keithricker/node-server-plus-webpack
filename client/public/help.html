@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Weather</title>
+        <link rel="icon" href="/img/weather.png">
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+    <body>
+        <div class="main-content">
+            {{>header}}
+            <form id="weatherForm">
+                <p>Get weather from anywyere. Input a location.</p>
+                <input type="text" id="weatherLocation" name="location" />
+                <button type="submit">Search</button>
+            </form>
+            <p id="weatherForecast"></p>
+            <p>{{body}}</p>
+            <img class="portrait" src='/img/robot.jpg' target='_blank'>
+        </div>
+        {{>footer}}
+        <script src="/js/app.js"></script>
+    <script src="/js/compiled/hot-dev-client.bundle.js"></script><script src="/js/compiled/default.bundle.js"></script><script src="/js/compiled/help.bundle.js"></script></body>
+</html> 

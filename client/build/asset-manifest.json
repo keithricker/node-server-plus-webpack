@@ -1,0 +1,25 @@
+{
+  "files": {
+    "about.js": "/js/compiled/about.chunk.js",
+    "about.js.map": "/js/compiled/about.chunk.js.map",
+    "help.js": "/js/compiled/help.chunk.js",
+    "help.js.map": "/js/compiled/help.chunk.js.map",
+    "main.js": "/js/compiled/main.chunk.js",
+    "main.js.map": "/js/compiled/main.chunk.js.map",
+    "runtime-about.js": "/js/compiled/runtime-about.bundle.js",
+    "runtime-about.js.map": "/js/compiled/runtime-about.bundle.js.map",
+    "runtime-help.js": "/js/compiled/runtime-help.bundle.js",
+    "runtime-help.js.map": "/js/compiled/runtime-help.bundle.js.map",
+    "runtime-main.js": "/js/compiled/runtime-main.bundle.js",
+    "runtime-main.js.map": "/js/compiled/runtime-main.bundle.js.map",
+    "about.html": "/about.html",
+    "help.html": "/help.html",
+    "index.html": "/index.html",
+    "precache-manifest.fe32cfc84d49902a3147bed7cf78e7df.js": "/precache-manifest.fe32cfc84d49902a3147bed7cf78e7df.js",
+    "service-worker.js": "/service-worker.js"
+  },
+  "entrypoints": [
+    "js/compiled/runtime-main.bundle.js",
+    "js/compiled/main.chunk.js"
+  ]
+}

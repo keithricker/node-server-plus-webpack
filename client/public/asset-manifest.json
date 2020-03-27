@@ -1,0 +1,24 @@
+{
+  "files": {
+    "about.js": "/js/compiled/about.bundle.js",
+    "about.js.map": "/js/compiled/about.bundle.js.map",
+    "contact.js": "/js/compiled/contact.bundle.js",
+    "contact.js.map": "/js/compiled/contact.bundle.js.map",
+    "default.js": "/js/compiled/default.bundle.js",
+    "default.js.map": "/js/compiled/default.bundle.js.map",
+    "help.js": "/js/compiled/help.bundle.js",
+    "help.js.map": "/js/compiled/help.bundle.js.map",
+    "hot-dev-client.js": "/js/compiled/hot-dev-client.bundle.js",
+    "hot-dev-client.js.map": "/js/compiled/hot-dev-client.bundle.js.map",
+    "main.js": "/js/compiled/main.bundle.js",
+    "main.js.map": "/js/compiled/main.bundle.js.map",
+    "setupTests.js": "/js/compiled/setupTests.bundle.js",
+    "setupTests.js.map": "/js/compiled/setupTests.bundle.js.map",
+    "about.html": "/about.html",
+    "help.html": "/help.html",
+    "index.html": "/index.html"
+  },
+  "entrypoints": [
+    "js/compiled/main.bundle.js"
+  ]
+}
