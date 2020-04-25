@@ -15,9 +15,9 @@ const CaseSensitivePathsPlugin = require('case-sensitive-paths-webpack-plugin');
 const WatchMissingNodeModulesPlugin = require('react-dev-utils/WatchMissingNodeModulesPlugin');
 const shouldUseSourceMap = process.env.GENERATE_SOURCEMAP !== 'false';
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const { TypeOf, mergeObject, pathName, container,prototypeHelpers } = require('./utilities')
+const { TypeOf, is, size, merge, pathName, container,prototypeHelpers } = require('./utilities')
 const appPackageJson = require(paths.appPackageJson)
-const { find, flip, remove} = prototypeHelpers()
+const { find, flip, filter, remove} = prototypeHelpers()
 const { resolveRules, newForkTsChecker, newManifestPlugin, newWorkboxGenerateSW, newHtmlWebPack, minimizer
 } = require('./plugins')
 const Alter = require('./alter')
@@ -26,6 +26,7 @@ const useTypeScript = fs.existsSync(paths.appTsConfig);
 // Some apps do not need the benefits of saving a web request, so not inlining the chunk
 // makes for a smoother build process.
 const shouldInlineRuntimeChunk = process.env.INLINE_RUNTIME_CHUNK !== 'false';
+const defined = (subject) => typeof subject !== 'undefined'
 
 module.exports.Entry = function Entry() {}
 module.exports.Configuration = class Configuration {
@@ -47,7 +48,7 @@ module.exports.Configuration = class Configuration {
 
    merge(template = this.template) {
       if (!Object.keys(template).length) return this
-      mergeObject(this, this.template, 'mode', (prop, target, source) => {
+      merge(this, this.template, 'mode', (prop, target, source) => {
          if (prop === 'entry') {
             if (TypeOf(source[prop]) === 'String') {
                source[prop] = {
@@ -84,10 +85,7 @@ module.exports.Configuration = class Configuration {
       const env = getClientEnvironment(paths.publicUrlOrPath.slice(0, -1));
 
       // Stop compilation early in production
-      this.bail = {
-         default: 'cheap-module-source-map',
-         production: shouldUseSourceMap && 'source-map' || false
-      }
+      this.bail = shouldUseSourceMap && 'source-map' || false
       // These are the "entry points" to our application.
       // This means they will be the "root" imports that are included in JS bundle.
       this.entry = {
@@ -102,7 +100,7 @@ module.exports.Configuration = class Configuration {
          // require.resolve('webpack-dev-server/client') + '?/',
          // require.resolve('webpack/hot/dev-server'),
 
-
+       
          development: {
             hotDevClient: require.resolve('react-dev-utils/webpackHotDevClient')
          },
@@ -214,9 +212,11 @@ module.exports.Configuration = class Configuration {
       }
       this.module = {
          strictExportPresence: true,
-         rules: { 
-            production: resolveRules('production'),
-            default: resolveRules('development')
+         production: {
+            rules: resolveRules('production'),
+         },
+         default: {
+            rules: resolveRules('development')
          },
          loaders: [
             // { test: /\.hbs$/, loader: "handlebars-loader" }
@@ -321,83 +321,136 @@ module.exports.Configuration = class Configuration {
 
    get proto() { return Object.getPrototypeOf(this) }
    set proto(prop) { Object.getPrototypeOf(this) = prop }
+   get entries() {
+      const returnObj = container(this.entry, {
+         keyFromPath: (filepath) => { 
+            let result = find(this.entry, (key,value) => path.name(value) === path.name(filepath) && key)
+            if (result && this.entry[result]) return result
+         }
+      })
+      return returnObj
+   }
+
 
    preRender(mode=this.mode, config=this) {
 
       if (config.mode && config.mode !== mode) {
-         mewConfig = {mode}
+         let newConfig = { mode }
          config = this.initialize.call(newConfig)
       }
 
-      const environments = ['default', 'production', 'development', 'all']
+      if (typeof config !== 'object' || !Object.keys(config).length)
+         return config
+      
+      const environments = ['development', 'production', 'default', 'all']
       const accepted = ['default', mode, 'all']
       config = Object(config)
       let props = Object.keys(config)
-      let confType = TypeOf(config)
-      const defined = (subject) => typeof subject !== 'undefined'
-      const clean = (obj) => {
-         if (!obj) return obj
-         return Object.keys(obj).reduce((cum, key) => {
-            if (environments.includes(key))
-               return cum
-            return { ...cum, [key]: obj[key]}
-         },{})
+      const check = (obj) => {
+         return this.preRender(mode, obj)
       }
-      
-      props.forEach((prop, ind) => {
-		 
-         if (TypeOf(config[prop]) === 'String') return true
-         let attach = [], rid, modeMatch
-         const length = (thing) => Object.keys(thing).length
-         const removeProp = () => confType === 'Array' && config.splice(ind,1) || delete config[prop]
-		 
-         environments.forEach(env => {
-            if (defined(config[env])) {
-               config = this.preRender(mode,{ config }).config
-            }
-            if (defined(config[prop]) && config[prop] && defined(config[prop][env])) {
-               rid = true
-               if (env === 'default' && defined(config[prop][mode]))
-                  return true
-               
-               if (accepted.includes(env)) {
+      const hasModes = (obj) => size(filter(obj, key => environments.includes(key)))
+      const noClass = (obj) => TypeOf(obj) === obj.constructor.name
+      let isImmutable = (prop) => (TypeOf(prop) === 'Object' && !noClass(prop)) || typeof prop !== 'object'
+      const join = (t,s) => {
+         let returnthis = TypeOf(t) === 'Array' ? t.concat(s) : Object.assign(t,s)
+         return returnthis
+      }
+      const integrate = (target, source) => {
 
-                  modeMatch = config[prop][env]
-                  if (confType === 'Array')
-                     config = config.concat(modeMatch)
-                  else {
-                     if (TypeOf(modeMatch) !== 'Object')    
-                        attach = attach.concat(modeMatch)
-                     else {
-                        if (TypeOf(attach === 'Array')) 
-                           attach = clean(config[prop])
-                        attach = { ...attach, ...modeMatch}
-                     }
-                  }
-					 
-               }
-            }
-         }) 
-         config[prop] = clean(config[prop])
-         if (length(attach) > 0) {
-            if (length(attach) === 1 && TypeOf(modeMatch) !== 'Array') config[prop] = attach[0]
-               else if (length(attach) > 1 && Object.keys(attach).every(el => TypeOf(attach[el]) === 'Object')) {
-                  Object.keys(attach).forEach(key => Object.assign(config[prop], attach[key]))
-               } else config[prop] = attach
+         if (!size(target) || TypeOf(target) !== 'Array' && isImmutable(source))
+            return source
+         if (TypeOf(target) === 'Array' || (!isImmutable(target) && !isImmutable(source)))
+            return join(target,source)
+         return target
+
+         /*
+         if (TypeOf(source) === 'Array' && !size(target))
+            return source
+         if (size(target) && TypeOf(target) === 'Object' && TypeOf(source) !== 'Object')
+            return target
+         if (isImmutable(target) && size(target))
+            return target
+         if (TypeOf(target) === 'Array' || (!isImmutable(target) && !isImmutable(source)))
+            return join(target,source)
+         if (!size(target) || isImmutable(source))
+            return source
+
+         return (!stop) ? integrate(source, target, true) : target
+         */
+      }
+      const getModes = (obj) => filter(obj, key => environments.includes(key))
+      const deleteModes = (obj) => filter(obj, key => !environments.includes(key))
+      const hasMore = (obj) => size(deleteModes(obj))
+      const removeProp = (propName) => TypeOf(config) === 'Array' && config.splice(propName,1) || delete config[propName]
+      
+      if ( hasModes(config)) {
+         config = this.preRender(mode,{ config }).config
+      }
+
+      props.forEach(prop => {
+      
+         if (isImmutable(config[prop]))
+            return config
+         
+         let modes = getModes(config[prop])
+         if (!size(modes)) {
+            config[prop] = check(config[prop])
+            return true
          }
-         else if (rid) {
-            if (!length(config[prop]))
-               removeProp()
-         }         
-         if (config[prop] && TypeOf(config[prop]) !== 'String' && TypeOf(config[prop]) !== 'Boolean' )
-            config[prop] = this.preRender(mode,config[prop])
+         const modeMatch = modes[mode] || modes['all'] || modes['default']
+         
+         const verticalJoin = (modes) => {
+            let starter = []
+            if (TypeOf(modeMatch) === 'Object' && !isImmutable(modeMatch) && hasMore(config[prop]))
+               starter = {}
+            else if (TypeOf(modeMatch) !== 'Array' && TypeOf(config[prop]) !== 'Array')
+               return modeMatch
+            let values = Object.values(modes).filter(val => val !== modeMatch)
+            values.push(modeMatch)
+            let reduced = values.reduce((cum, val) => join(cum,val),starter) 
+            return reduced
+         }
+         if (!modeMatch) {
+            let other = Object.values(modes)[0]
+            config[prop] = deleteModes(config[prop])
+            if (!size(config[prop])) {
+               if (TypeOf(other) === 'Array')
+                  config[prop] = []
+               else config[prop] = undefined
+               return true
+            }
+            config[prop] = check(config[prop])
+            return true
+         }
+         
+         Object.keys(modes).forEach(env => {
+            if (!accepted.includes(env) || env === 'default' && defined(config[prop][mode]))
+               delete modes[env]
+         })
+        		 
+         let filtered = deleteModes(config[prop])
+         if (!size(filtered)) config[prop] = {}
+     	 config[prop] = deleteModes(config[prop])
+         modes = verticalJoin(modes)
+         
+         if (TypeOf(config) === 'Array') {
+            modes = check(modes)
+            config = integrate(config, modes)
+            removeProp(prop)
+            return config
+         }
+
+         config[prop] = integrate(config[prop], modes)
+ 	     config[prop] = check(config[prop])
+         
       })        
       return config
    }
 
-   render(mode, config=this) {
+   render(mode=this.mode, config=this) {
+
       config = this.preRender(mode, config)
-      console.log(config)
       const { alterConfig, alterHtml } = new Alter(config)
       let newConfig = alterHtml(alterConfig(config))
       return { ...newConfig, entry: { ...newConfig.entry} }
@@ -406,7 +459,7 @@ module.exports.Configuration = class Configuration {
    outputPatterns() {
       const environments = ['development', 'staging', 'production']
       environments.reduce((cum,env) => {
-         const conf = this.preRender(conf,env)
+         const conf = this.preRender(env,conf)
          return [
             conf.output.filename,
             conf.output.chunkFilename,
@@ -424,16 +477,6 @@ module.exports.Configuration = class Configuration {
       let returnObj = container(plugins,{
          asArray: () => plugins,
          findByName: (name) => reduced[name],
-      })
-      return returnObj
-   }
-
-   getEntries(entry = this.entry) {
-      const returnObj = container(entry, {
-         keyFromPath: (filepath) => { 
-            let result = find(entry, (key,value) => path.name(value) === path.name(filepath) && key)
-            if (result && entry[result]) return result
-         }
       })
       return returnObj
    }

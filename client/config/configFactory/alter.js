@@ -1,7 +1,7 @@
 'use strict'
 
 function Alter(config) {
-  console.log(config)
+
   // Makes the script crash on unhandled rejections instead of silently
   // ignoring them. In the future, promise rejections that are not handled will
   // terminate the Node.js process with a non-zero exit code.
@@ -24,7 +24,7 @@ function Alter(config) {
   this.alterConfig = function(conf=config) {
     // Get list of file names from src/JS directory
     let configEntry = conf.entry
-    console.log('entry', configEntry)
+    console.log('configentry', configEntry)
     objectFind(configEntry).whereValHas(['*','[name]']).forEach((key,value) => {
       const sourceDir = path.dirname(value);
       fs.readdirSync(sourceDir).forEach(file => {
@@ -59,11 +59,10 @@ function Alter(config) {
   const generateHtmlPlugins = (plugin, conf=config, clone=true) => {
     const thePlugin = (clone) ? conf.clonePlugin(plugin) : plugin
     const configEntry = conf.entry
-    const configTool = conf.getEntries();
     const filename = thePlugin.options.filename
     const pluginType = (filename.has('[name]','*') && 'template' || 'normal')
     const htmlFilename = path.name(filename)
-    const entryName = configTool.keyFromPath(htmlFilename) || htmlFilename
+    const entryName = conf.entries.keyFromPath(htmlFilename) || htmlFilename
     const outputFile = paths.appPublic+path.sep+filename
     const outputFolder = path.dirname(outputFile)
 
@@ -110,7 +109,7 @@ function Alter(config) {
     // Get their scrip tags using regex
     let matches = contents.findAll('<script (?:[^\/]*)(.*?)"><\/script>');
     return [ ...new Set(matches)]
-    .map(filepath => conf.getEntries().keyFromPath(filepath) || false)
+    .map(filepath => conf.entries.keyFromPath(filepath) || false)
     .filter(Boolean)
   }
 
