@@ -5,7 +5,7 @@ const { integrate, clone } = require('./Objekt')
 class Mirror {
 
    constructor(obj,extension,bind,excl=[],destructive=true,backup=true) {
-      if (TypeOf(extension) !== 'Array') extension = [extension]
+      if (TypeOf(extension) !== 'Array' || extension === Array.prototype) extension = [extension]
       excl = typeof excl === 'string' ? [excl] : excl || []
       this['<target>'] = obj; this['<bind>'] = bind; this['<destructive>'] = destructive
 
@@ -31,20 +31,30 @@ class Mirror {
       }
       this.extensions = new MirrorArray(...extension); this.exclusions = new MirrorArray(...excl)
       let target=obj,source=this.extensions; excl=this.exclusions
+      let thiss = this
 
       const handler = {
          get(trg = target, prop) {
-            let src; 
-            if (excl.includes(prop) || excl[0] === '*' && prop in trg) src = trg
-            else src = (defined(source.get(prop)) && defined(source.get(prop)[prop])) ? source.get(prop) : (prop in trg) && trg
+            let src; let type = thiss['<type>']
+            if ((excl.includes(prop) || excl[0] === '*') && (prop in trg)) src = trg
+            else src = (defined(source.get(prop)) && (prop in source.get(prop))) ? source.get(prop) : (prop in trg) ? trg : src
+
             if (!src) return void(0)
-            
             let desc = Object.getOwnPropertyDescriptor(trg,prop)
             if (src !== trg && desc && typeof desc.configurable === 'boolean' && desc.configurable === false) {
                if (desc.writable === false) return trg[prop]
                let old = trg[prop]; trg[prop] = src[prop]; try { return trg[prop] } finally { trg[prop] = old } 
             }
-            return (typeof src[prop] === 'function' && bind && bind !== src && prop !== 'constructor') ? src[prop].bind(bind) : bind && bind !== src && Reflect.get(src,prop,bind) || tryCatch(() => Reflect.get(src,prop,trg)) || tryCatch(() => Reflect.get(src,prop,src))
+            function getReturnVal(sr=src,pr=prop,bn=bind,tr=trg) { 
+               let desc = Object.getOwnPropertyDescriptor(sr,pr)
+               let isGet = desc && ("get" in desc)
+               let returnVal; 
+               if (typeof sr[pr] === 'function' && !isGet && bn && bn !== sr && pr !== 'constructor')
+                  returnVal = sr[pr].bind(bn) 
+               if (typeof returnVal === 'undefined') returnVal = (bn && bn !== sr) ? Reflect.get(sr,pr,bn) : tryCatch(() => Reflect.get(sr,pr,tr)) || tryCatch(() => Reflect.get(sr,pr,sr)) 
+               return returnVal
+            }
+            return getReturnVal()
          }
       }
       Object.setPrototypeOf(handler,this)
@@ -61,11 +71,13 @@ class Mirror {
   }
   
   set(trg,prop,val) {
+     let type = this['<type>']
      trg = this['<target>']; let src=this.extensions; let dest = this['<destructive>']; let bind=this['<bind>']
      trg = (dest && src.length > 2) ? bind || src.get(prop) || trg : src.length < 3 ? defined(src.get(prop)) ? src.get(prop) : src[0] : !dest && src[0]
      write(trg,prop,val,null,bind) 
   }
   deleteProperty(trg, prop) {
+     let type = this['<type>']
      trg = this['<target>']; let source=this.extensions; let bind=this['<bind>']; let destructive = this['<destructive>']; let exc=this.exclusions
      if (destructive) {
         delete trg[prop]; if (source.get(prop)) delete source.get(prop)[prop]; if (bind) delete bind[prop]
@@ -77,25 +89,33 @@ class Mirror {
      }
   }
   static extender(obj,extension,destructive) {
-     return new this(obj,extension,obj,['*'],destructive)
+     let returnVal = new this(obj,extension,obj,['*'],destructive)
+     Object.defineProperty(mirrors(returnVal),'<type>',{value:'extender',enumerable:false,configurable:true})
+     return returnVal
   }
   static merger(obj,extension,destructive) {
-     return new this(obj,extension,null,[],destructive)
+     let returnVal = new this(obj,extension,null,[],destructive)
+     Object.defineProperty(mirrors(returnVal),'<type>',{value:'extender',enumerable:false,configurable:true})
+     return returnVal
   }
   static clone(blank,obj,bind,method=write) {
+
      bind = bind || obj; let newProx
-     
-     if (!blank && typeof obj === 'function') {
-        blank = {[blank.name]: function(...arg) {
-           if (!new.target)
-           return obj.call(...arg)
-           return new obj(...arg)
-        }}[blank.name]
-     }  
-     blank = blank || new (TypeOf.class(obj)); 
-     blank = integrate(blank,obj,[],null,false)
-     newProx = integrate.mirror(blank,obj,bind)
-     return new Proxy(newProx,this.handlers.clone(bind,method))         
+     if (!blank) {
+        if (typeof obj === 'function') {
+           blank = {[blank.name]: function(...arg) {
+              if (!new.target)
+              return obj.call(...arg)
+              return new obj(...arg)
+           }}[blank.name]   
+        } else blank = new (TypeOf.class(obj));    
+        blank = integrate(blank,obj,[],null,false)
+        newProx = integrate.mirror(blank,obj,bind)
+     } 
+     newProx = newProx || blank
+
+     let returnVal = new Proxy(newProx,this.handlers.clone(bind,method))   
+     return returnVal    
   }
 }
 Mirror.handlers = {

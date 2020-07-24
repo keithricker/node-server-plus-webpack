@@ -39,11 +39,12 @@ function funktion(func,funcName,replace={}) {
 
    def.toString = def.toString || 
    `const ${def.name} = function ${def.name}(...args) {
-      tie = ties.get(${def.name}) || []
+      tie = ties.get(${def.name}) || [func]
       arguments = [...tie,...args];
       if (typeof ${def.name}['<init>'] !== 'undefined') delete ${def.name}['<init>']
-      if (!new.target) 
+      if (!new.target) {
          return func.call(...arguments)
+      }
       return new func(...args)
    }; return ${def.name}`
 
@@ -68,6 +69,7 @@ function funktion(func,funcName,replace={}) {
          Object.defineProperty(fun,'name',{value:nm})
          if (args[0] !== null) Object.defineProperty(fun,'<tie>',{value:args[0],enumerable:false, configurable:true})
          if (arguments.length > 0) { if (fun.init) delete fun.init; } 
+         return fun
       }
       return fun
    }

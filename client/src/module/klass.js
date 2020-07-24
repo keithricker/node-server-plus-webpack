@@ -1,9 +1,18 @@
-const { Global,tryCatch,defined,TypeClass,FrailMap,TypeOf,write,history,simpleMerge } = require('./utils')
+const { Global,tryCatch,defined,TypeClass,FrailMap,TypeOf,write,history,simpleMerge,Lineage } = require('./utils')
 const funktion = require('./funktion')
 const { Mirror, mirrors } = require('./Mirror')
 const { integrate } = require('./Objekt')
 const proto = { get:Object.getPrototypeOf, set:Object.setPrototypeOf }
 const descriptor = Object.getOwnPropertyDescriptor
+
+function rand(length = 8) {
+   let num = length / 2 + 2;
+   return (
+      Math.random().toString(36).substring(2, num) +
+      Math.random().toString(36).substring(2, num)
+   );
+}
+const backupKey = rand()+rand()
 
 const klass = (function() {
 
@@ -50,7 +59,7 @@ const klass = (function() {
                   this.template.init(klsfunc,thiss); 
                   let kv = klassVars(klsfunc); kv.initialized = vrs.initialized = true; klassVars.set(klsfunc,kv); 
                   vrs.initialized = true; delete this.template.init; delete vrs.init;
-               } else {  console.log('initializing ...') }
+               } else {  console.log(klsfunc.name+' initializing ...');console.log(klsfunc.name+' initializing ...');console.log(klsfunc.name+' initializing ...') }
             }
          }}
          if (tmp.template) tmp.template = integrate(tmp.template,{...tmp},['__proto__','template',typeof tmp.template === 'function' && 'constructor'],null,false)
@@ -89,6 +98,7 @@ const klass = (function() {
 
       vars.template.private = vars.template.private || {}
 
+
       let bind = instanceVars(this) && instanceVars(this).bind
       if (bind) {
          Reflect.ownKeys(vars.template.prototype).forEach(pro => {
@@ -103,6 +113,10 @@ const klass = (function() {
       klsVars.KlassFunc = mirrorClass
       klsVars = { ...klsVars,...initialVars,vars }
       addMethods(vars.klassFunc); 
+      if (vars.klassFunc !== vars.constructor) {
+         simpleMerge(vars.constructor,vars.klassFunc)
+         Object.setPrototypeOf(vars.constructor,Object.getPrototypeOf(vars.klassFunc))
+      }
       klassVars.set(vars.klassFunc,klsVars)
       return vars.klassFunc
 
@@ -134,9 +148,11 @@ const klass = (function() {
             integrate(func.prototype,tmp.prototype,['__proto__'],null,false)
          } else if (TypeOf(tmp) === 'Object') {
             if (tmp.static) simpleMerge(func,tmp.static,['prototype','constructor'])
-            if (descriptor(func,'prototype').writable === false) {
-               simpleMerge(func.prototype,tmp.prototype)
-            } else func.prototype = tmp.prototype 
+            if (tmp.prototype) {
+               if (descriptor(func,'prototype').writable === false) {
+                  simpleMerge(func.prototype,tmp.prototype)
+               } else func.prototype = tmp.prototype
+            }
             if (tmp.extends) {
                proto.set(func.prototype,tmp.extends.prototype)
                proto.set(func,tmp.extends) 
@@ -146,39 +162,50 @@ const klass = (function() {
       function newKlassFunc(className=vars.name) {
          let backup=true
          const klassFunc = {[className]: function(...arg) {
+            let last = arg[arg.length-1];
+            if (TypeOf(last) === 'Object' && last.backup && last.key && last.key === backupKey) {
+               last = arg.pop()
+               backup = last.backup  
+            }
             let thiss = this
             let newTarget = new.target
             let kvars = klassVars(klassFunc) || vars
-            let cls = kvars.KlassFunc; let oldConstructor = this.constructor
+            let cls = kvars.KlassFunc;
             let func = kvars.constructor
 
             const invoke = () => {
+               let returnVal
                thiss.newTarget = !!thiss.Super
-               if (!thiss.newTarget) {
+               if (!thiss.newTarget && !newTarget) {
+                  thiss = func(...arg)
+               }
+               else if (!thiss.newTarget) {
                   thiss = new cls(...arg)
                   thiss.constructor = cls
                }
-
                let priv = new Mirror({},vars.template.private,thiss,false)
                instanceVars.set(thiss,priv); 
                write(thiss, '{{vars}}', { get: function() { return instanceVars(thiss) }, enumerable:false })
 
                if (!cls || !func)
-                  return newTarget ? thiss : void 0
+                  returnVal = newTarget ? thiss : void 0
 
-               if (newTarget)
-                  return new cls(...arg)
+               else if (newTarget)
+                  returnVal = new cls(...arg)
+
+               else if (thiss.newTarget)
+                  returnVal = func.call(thiss,...arg)
 
                if (thiss.newTarget && !kvars.initialized)
                   kvars.init(vars.klassFunc,thiss); 
-            
-               try { return !thiss.newTarget ? thiss : func.call(thiss,...arg) } finally { delete thiss.newTarget; thiss.constructor = oldConstructor }
+
+               try { return returnVal || !thiss.newTarget ? thiss : func.call(thiss,...arg) } finally { delete thiss.newTarget; thiss.constructor = func }
             }
             let arch
             if (backup) arch = invoke();
             backup = false
             const res = invoke()
-            history.set(res,{0: arch})
+            if (arch) history.set(res,{0: arch})
             return res
          }}[className]
          return klassFunc
@@ -210,11 +237,16 @@ const klass = (function() {
          }
       } 
    }
-   klassFunction.Super = function(klassFunc,int=true,vars={}) {
+   klassFunction.Super = function(klassFunc,int=true,vars) {
+      let newInstanceArgs
+      vars = vars || klassFunc && klassVars(klassFunc) || {}
       vars.klassFunc = vars.klassFunc || klassFunc
       vars = { ...vars, name:vars.name || vars.klassFunc.name, newTarget: defined(vars.newTarget) ? vars.newTarget : new.target }
-      let extendz = vars.klassFunc === Object ? Object : vars.extends || vars.klassFunc.extends || vars.klassFunc.constructor.extends || proto.get(vars.klassFunc.prototype || proto.get(proto.get(vars.klassFunc))).constructor
+      let constr = typeof vars.klassFunc === 'function' ? vars.klassFunc : vars.klassFunc.constructor
+      let extendz = constr === Object ? Object : vars.extends || constr.extends || proto.get(constr.prototype) && proto.get(constr.prototype).constructor || Object
+      vars.klassFunc = constr
       let superMirror, superRes, Sup, superArgs
+
       const getSuperArgs = (newArgs) => { 
          let SA = newArgs || superArgs
          if (!SA) return
@@ -229,13 +261,17 @@ const klass = (function() {
       }
       const KlassFunc = {[vars.name]: class extends extendz {
          constructor(...arg) {
-            let newKonstructor; let thisBase
+
+            let newKonstructor; let thisBase; 
             if (arg[0] === 'super') {
+   
                Sup = {['super']: (...ar) => { 
                   superArgs = ar; superRes = super(...ar); 
-                  vars.base = new extendz(...getSuperArgs())
+                  newInstanceArgs = [...getSuperArgs(),{backup:false,key:backupKey}]
+                  vars.base = vars.base || new extendz(...newInstanceArgs)
+
                   if (extendz === Object) {
-                     thisBase = new extendz(...getSuperArgs())
+                     thisBase = new extendz(...newInstanceArgs)
                      if ((superRes instanceof thisBase.constructor) == false) {
                         let basePro = proto.get(thisBase)
                         let supPro = integrate({},proto.get(superRes),[],null,false)
@@ -257,9 +293,12 @@ const klass = (function() {
 
             let sup = { ['super']: (...ar) => {
                if (!superArgs) superArgs = ar;
+            
                superRes = new KlassFunc('super')(...ar)
+               newInstanceArgs = [...getSuperArgs(ar),{backup:false,key:backupKey}]
+
                if (extendz === Object) {
-                  vars.base = new extendz(...getSuperArgs(ar))
+                  vars.base = new extendz(...newInstanceArgs)
                   if ((superRes instanceof vars.base.constructor) == false) {
                      let basePro = proto.get(vars.base)
                      let supPro = integrate({},proto.get(superRes),[],null,false)
@@ -267,8 +306,7 @@ const klass = (function() {
                      proto.set(vars.base,supPro)
                   } else proto.set(vars.base,proto.get(superRes))
                   superRes = vars.base  
-               } 
-               vars.base = new extendz(...getSuperArgs())
+               } else vars.base = vars.base || new extendz(...[...getSuperArgs(),{backup:false,key:backupKey},{func:sup,line:321}])
                vars.thiss.super = sup
                makeSuper(sup,vars.base,extendz)
                return superRes
@@ -281,19 +319,22 @@ const klass = (function() {
 
             const konstruct = { new: (...ar) => {
                arg = ar.length > 0 ? ar : arg
-            
                try { 
-                  let res = vars.klassFunc.call(vars.thiss,...arg) || vars.thiss;
-                 
-                  if (superArgs) {
-                     vars.base = new extendz(...getSuperArgs())
+                  let kFunc = vars.constructor || vars.klassFunc
+                  let res = kFunc.call(vars.thiss,...arg) || vars.thiss;
+
+                  if (superArgs) {   
+                     newInstanceArgs = [...getSuperArgs(),{backup:false,key:backupKey}]
+                     vars.base = new extendz(...newInstanceArgs)
                      makeSuper(sup,vars.base,extendz)
                      vars.thiss = sup(...getSuperArgs()); vars.thiss.Super = sup
-                     res = vars.klassFunc.call(vars.thiss,...arg) || sup(...getSuperArgs())
+                     // res = vars.klassFunc.call(vars.thiss,...arg) || sup(...getSuperArgs())
+                     res = kFunc.call(vars.thiss,...arg) || sup(...getSuperArgs())
                   }
-                  if (proto.get(res).constructor !== proto.get(this).constructor) {
-                     if (TypeOf(res) === TypeOf(this) && proto.get(res).constructor.className === TypeOf(res)) {
-                        proto.set(res,this.constructor.prototype)  
+                  let thiss = vars.thiss
+                  if (proto.get(res).constructor !== proto.get(thiss).constructor) {
+                     if (TypeOf(res) === TypeOf(thiss) && proto.get(res).constructor.className === TypeOf(res)) {
+                        proto.set(res,thiss.constructor.prototype)  
                      }
                   }
                   return res
@@ -302,7 +343,12 @@ const klass = (function() {
             if (newKonstructor) return konstruct
             let res = konstruct() 
             if (res instanceof vars.thiss.constructor)
-            write(res,'<konstructor>',{value:konstruct,enumerable:false,writable:false,configurable:false})
+               write(res,'<konstructor>',{value:konstruct,enumerable:false,writable:false,configurable:false})
+            if (vars.klassFunc) {
+               let resProto = Object.getPrototypeOf(res).constructor.name
+               if (Lineage(vars.klassFunc)[resProto])
+                  Object.setPrototypeOf(res,vars.klassFunc.prototype)
+            }
             return res
          }
       }}[vars.name]
@@ -322,9 +368,10 @@ const klass = (function() {
       return new mirrorKlass('super')
 
       function makeSuper(supper,base,extendz) {
-         base = base || vars.base; supper = supper || Sup; let ar = getSuperArgs() || []
+         let ar = getSuperArgs() || []; newInstanceArgs = [...ar,{backup:false,key:backupKey}]
+         base = base || vars.base; supper = supper || Sup;
          let TypeCon = TypeClass(extendz).constructor
-         if (!base) tryCatch( () => base = new extendz(...ar),() => base = proto.set(new TypeCon,extendz.prototype) )
+         if (!base) tryCatch( () => base = new extendz(...newInstanceArgs),() => base = proto.set(new TypeCon,extendz.prototype) )
 
          if (base && superRes && Object.is(base,superRes)) {
             let newBase = new (Global[TypeOf(base)]) 

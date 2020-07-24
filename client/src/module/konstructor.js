@@ -13,13 +13,15 @@ const konstructor = klass('konstructor').extends(Object)
       bind = typeof thiss === 'function' ? thiss : thiss.constructor
    else
       bind = thiss 
-   let ext = type === 'class' ? this.constructor : this.constructor.prototype
+   let instance = !new.target ? {constructor:konstructor} : this
+   let ext = type === 'class' ? instance.constructor : instance.constructor.prototype
    let extended = {}; integrate.extend(extended,ext,bind,['descriptors','super'])
+
    if (!bind.super && proto.get(thiss).constructor.name !== 'konstructor' && bind.name !== 'konstructor' && bind.constructor.name !== 'konstructor') {
       konstructor.define(extended,'super',{ get: function() { return klass.Super(type === 'class' ? thiss : thiss.constructor) }})
       Object.defineProperty(extended,'descriptors',{get: function descriptors() { return Objekt.descriptors(bind) }})
    }
-   proto.set(extended,{constructor:this.constructor})
+   proto.set(extended,{constructor:instance.constructor})
    return extended 
 })
 .template(() => {
@@ -32,7 +34,7 @@ const konstructor = klass('konstructor').extends(Object)
          obj = props === obj ? this : argu.shift()
          props = { enumerable:arg[0] || false ,writable: arg[1] || false, configurable: arg[2] || arg[1] || true } 
          let prop = argu[0]; let def = (argu[1].value || argu[1].get) ? argu[1] : { value: argu[1],...props } 
-         return write(obj,prop,def)        
+         write(obj,prop,def); return obj     
       }
       static get properties() {
          let thiss = this
@@ -52,8 +54,9 @@ const konstructor = klass('konstructor').extends(Object)
          }
          return extendz
       }           
-      define(prop,def) { 
-         return konstructor.define(this,prop,def,true,true,true)
+      define(prop,def) {
+         let thiss = this
+         return konstructor.define(thiss,prop,def,true,true,true)
       }
       get properties() { 
          if (!this || this === Global || this === konstructor || (this.hasOwnProperty('constructor') && this.constructor.name === 'konstructor')) return
@@ -68,8 +71,8 @@ const konstructor = klass('konstructor').extends(Object)
          // integrate.extend(properties,thiss,thiss,['properties','descriptors','__proto__']);
          // return new Proxy(properties,Mirror.handlers.clone(thiss,konstructor.define))
       }
-      get static() { 
-         let constr = this.constructor;
+      get static() {
+         let constr = this.constructor; if (constr.name === 'konstructor') return
          let thiss = this
          let Static = (prop) => {
             let vars = constr['{{vars}}']
@@ -83,13 +86,25 @@ const konstructor = klass('konstructor').extends(Object)
             }
             if (!inits(constr)) inits.set(constr,{static:true})
             inits(constr).static = true
+            return constr
          }
          Reflect.ownKeys(constr).filter(nm => !['prototype','constructor','caller','length','name','arguments'].includes(nm)).forEach(nm => {
             let desc = Object.getOwnPropertyDescriptor(constr,nm);
             write(Static,nm,desc,constr,constr)
          })
-         return new Proxy(Static,Mirror.handlers.clone(constr,konstructor.define))
+         return Mirror.clone(Static,constr,null,konstructor.define)
       }
+      get super() {
+         const thiss = this
+         if (reflect(thiss).everything.includes('super') || thiss instanceof konstructor) return
+         return klass.Super(thiss)
+      }
+      get descriptors() { 
+         const thiss = this
+         if (reflect(thiss).everything.includes('descriptors') || thiss instanceof konstructor) return
+         return Objekt.descriptors(thiss) 
+      }
+
       get(...arg) { 
          if (arg.length === 1 && TypeOf(arg[0]) === 'Object') {
             Object.keys(arg[0]).forEach(key => write.get(this,key,null,arg[0]))
@@ -124,7 +139,7 @@ const konstructor = klass('konstructor').extends(Object)
          integrate.extend(prototype,Objekt.proto.get(thiss),thiss)
          prototype.set = (x) => proto.set(thiss,x)
          delete prototype.length; delete prototype.name;
-         return new Proxy(prototype,Mirror.handlers.clone(Objekt.proto.get(thiss),konstructor.define))
+         return Mirror.clone(prototype,Objekt.proto.get(thiss),konstructor.define)
       }
       set init(func) { 
          let vars = this['{{vars}}']

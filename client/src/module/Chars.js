@@ -41,12 +41,19 @@ const Chars = klass({
       replace(...target) {
          let str = this
          let theString = str
-         Objekt.clone(theString)
-         return {
+         const walkBack = Objekt.clone(theString)
+         function _with(strg = theString,trg=target,replacement) {
+            strg = strg.toString()
+            trg.forEach(tr => {
+               strg = String.prototype.replace.call(strg,tr,replacement)
+            })
+            return strg
+         }
+         theString = (arguments.length === 2 && (typeof arguments[0] === 'string' && typeof arguments[1] === 'string')) ? _with(theString,[arguments[0]],arguments[1]) : theString 
+         return Objekt.mixin(Object(theString), {
             with: (replacement) => {
-               target.forEach(trg => {
-                  theString = String.prototype.replace.call(theString,trg,replacement)
-               })
+               theString = walkBack
+               theString = _with(theString,target,replacement)
                return Objekt.mixin(Object(theString), {
                   all: () => {
                      let results = str.toString()
@@ -57,7 +64,7 @@ const Chars = klass({
                   }            
                })
             }
-         }
+         })
       },
       random(length = 8) {
          let num = length / 2 + 2;

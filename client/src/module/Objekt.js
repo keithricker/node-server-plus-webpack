@@ -8,6 +8,7 @@ const Objekt = (function() {
       if (new.target) return new ObjektClass(...arg)
       bind = arguments[0] || (this && this !== ObjektFunc && this !== Global && !this instanceof ObjektClass) && this
       let extended = {constructor:ObjektClass}; Reflect.ownKeys(ObjektClass.prototype).forEach(key => ObjektClass.define(extended,key,null,ObjektClass.prototype,bind))
+      attributes.set(bind,{Objekt:extended})
       return extended
    }
    const ObjektClass = class Objekt {
@@ -18,8 +19,6 @@ const Objekt = (function() {
             // Object.defineProperty(newThingProto,'properties',{ get: function() { return new ObjectMap(newThing)} })
             ObjektClass.proto.set(newThing,newThingProto)
             simpleMerge(newThingProto,this.constructor.prototype)
-            Object.defineProperty(newThingProto.symbol,'set', { value: function(...arg) { return  ObjektClass.symbol.set(newThing,...arg) },configurable:true })
-            Object.defineProperty(newThingProto.symbol,'for', { value: function(...arg) { return  ObjektClass.symbol.for(newThing,...arg) },configurable:true })
             Object.defineProperty(newThingProto,'native', { value:true,writable:false,enumerable:false,configurable:true })
             return newThing
          }
@@ -275,6 +274,16 @@ const Objekt = (function() {
       get superClass() { if (!this || this === Global) return; return ObjektClass.superClass(this) }
       get reflect() { if (!this || this === Global || (this.hasOwnProperty('constructor') && this.constructor.name === 'Objekt')) return; return reflect(this) }
       get proto() { if (!this || this === Global) return; return { get['get']() { return Object.getPrototypeOf(this) }, set:Object.setPrototypeOf.bind(null,this) } }
+      get symbol() {
+         let thiss = this; let OC = ObjektClass
+         if (!thiss || thiss === Global || (this.name && this.name !== 'symbol' && (this.name in ObjektClass.prototype)) ) return
+         function symbol(...arg) { 
+            return ObjektClass.symbol(thiss,...arg)
+         }
+         symbol.set = function(...arg) { return OC.symbol.set(thiss,...arg) }
+         symbol.for = function(...arg) { return OC.symbol.for(thiss,...arg) }
+         return symbol
+      }
       get symbols() { if (!this || this === Global) return; return ObjektClass.symbols(this) }
       get descriptors() { if (!this || this === Global) return; return Object.getOwnPropertyDescriptors(this) }
       get TypeOf() { if (!this || this === Global) return; return ObjektClass.TypeOf(this) }
@@ -291,10 +300,6 @@ const Objekt = (function() {
       delete(prop) { return ObjektClass.deleteProperty(this,prop) }
       mixin(mix) { return ObjektClass.mixin(this,mix) }
       define(...arg) { return ObjektClass.define(this,...arg) }
-      symbol(...arg) { 
-         let thiss = this
-         return (!thiss || thiss === Global || this.name && (this.name in ObjektClass.prototype) ) ? undefined : ObjektClass.symbol(thiss,...arg)
-      }
       descriptor(...arg) { return Object.getOwnPropertyDescriptor(this,...arg) }
       equivalent(obj) { return ObjektClass.equivalent(this,obj) }
       eject() {  
@@ -313,7 +318,8 @@ const Objekt = (function() {
    }})
    ObjektClass.symbol.set = function(obj,name,val,fr) { 
       let newSymbol = fr ? Symbol.for(name) : typeof name === 'symbol' ? name : Symbol(name)
-      obj[newSymbol] = val; 
+      obj[newSymbol] = val;
+      console.log('hey',obj) 
       return newSymbol
    }
    ObjektClass.symbol.for = function(...arg) { return ObjektClass.symbol.set(...arg,true) }

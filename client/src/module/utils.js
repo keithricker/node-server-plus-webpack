@@ -60,7 +60,6 @@ const size = function(thing, ...exclude) {
    if (!isValid(thing)) return -1;
    if (typeof thing === 'object') { 
       if (("length" in thing) && typeof thing !== 'function') return thing.length 
-      console.log('hey')
    }
    const isProto = TypeOf(thing) === 'Object' && !thing.constructor.name === Object.getPrototypeOf(thing).constructor.name
    let names = Reflect.ownKeys(thing).filter(name => {
@@ -73,7 +72,7 @@ const size = function(thing, ...exclude) {
 function simpleMerge(trg,src,exc=[],bind,defaults) {
    Reflect.ownKeys(src).forEach(pr => {
       let trgDesc = Object.getOwnPropertyDescriptor(trg,pr); let desc
-      if ((trgDesc && trgDesc.configurable === false) || exc.includes(pr)) return
+      if ((trgDesc && trgDesc.configurable === false && trgDesc.writable === false) || exc.includes(pr)) return
       const val = Reflect.get(src,pr,bind||src)
       if (isDescriptor(val)) {
          desc = src[pr];
@@ -106,7 +105,7 @@ const FrailMap = (function() {
          return frailMap
       }
       get(...arg) { return maps.get(this).get(...arg); }
-      set(...arg) { let has = maps.get(this).has(arguments[0]); let set = maps.get(this).set(...arg); if (!has && set) this.size++; return set }
+      set(...arg) { if (typeof arguments[0] !== 'object' && typeof arguments[0] !== 'function') return; let has = maps.get(this).has(arguments[0]); let set = maps.get(this).set(...arg); if (!has && set) this.size++; return set }
       delete(...arg) { let deleted = maps.get(this).delete(...arg); if (deleted) this.size --; return deleted }
       has(...arg) { return maps.get(this).has(...arg) }
    }
@@ -270,6 +269,8 @@ function write(trg,key,val,src,bind,backup=true) {
       if (!equivalent(last,trg))
          hist[hist.length] = clone(trg)
    }
+
+   if (src && src.constructor === Function && Array('caller','callee','arguments').includes(key)) return trg
    let valDesc = val && isDescriptor(val) ? val : src && isDescriptor(src[key]) ? src[key] : null; let srcDesc = src && isDescriptor(src[key]) ? src[key] : src && Object.getOwnPropertyDescriptor(src,key); let trgDesc = Object.getOwnPropertyDescriptor(trg,key); 
    let defaultDesc = (val && !(typeof val === 'object' && (('get' in val) || ('set' in val)))) ? { value:val,writable:true,enumerable:true,configurable:true } : { ...val }
    
